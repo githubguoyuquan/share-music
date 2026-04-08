@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "../AuthContext";
 
 function ClientAuthInner() {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,6 +15,7 @@ function ClientAuthInner() {
   const router = useRouter();
   const params = useSearchParams();
   const next = useMemo(() => params.get("next") || "/client", [params]);
+  const { refresh } = useAuth();
 
   const submit = async () => {
     if (loading) return;
@@ -48,6 +50,7 @@ function ClientAuthInner() {
         return;
       }
       setSuccess(isLogin ? "登录成功，正在跳转..." : "注册成功，正在跳转...");
+      await refresh();
       setLoading(false);
       router.push(next);
     } catch {
