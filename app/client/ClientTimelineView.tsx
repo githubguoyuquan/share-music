@@ -139,8 +139,11 @@ export default function ClientTimelineView() {
     );
   }
 
+  useEffect(() => {
+    if (authChecked && !authed) router.replace("/");
+  }, [authChecked, authed, router]);
+
   if (!authed) {
-    router.replace("/");
     return null;
   }
 
