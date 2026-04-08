@@ -22,6 +22,7 @@ type UserCategory = { id: string; name: string; isSystem: boolean; songs?: { son
 
 export default function ClientTimelineView() {
   const [songs, setSongs] = useState<Song[]>([]);
+  const [authChecked, setAuthChecked] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [page, setPage] = useState(1);
@@ -63,9 +64,12 @@ export default function ClientTimelineView() {
     fetch("/api/auth/me").then((r) => r.json()).then((d) => {
       const ok = Boolean(d?.success);
       setAuthed(ok);
-      if (ok) loadCategories();
+      setAuthChecked(true);
+      if (ok) {
+        loadCategories();
+        loadPage(1);
+      }
     });
-    loadPage(1);
   }, []);
 
   useEffect(() => {
@@ -123,6 +127,24 @@ export default function ClientTimelineView() {
     await loadCategories();
   };
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#060606] via-[#0b0b0b] to-black p-6 md:p-8">
+        <div className="mb-8 h-12 w-64 animate-pulse rounded-xl bg-zinc-800/60" />
+        <div className="space-y-4">
+          <div className="h-24 animate-pulse rounded-2xl bg-zinc-900/80" />
+          <div className="h-24 animate-pulse rounded-2xl bg-zinc-900/80" />
+          <div className="h-24 animate-pulse rounded-2xl bg-zinc-900/80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!authed) {
+    router.replace("/");
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#060606] via-[#0b0b0b] to-black text-zinc-100 p-6 md:p-8">
       <div className="mb-8 flex items-center justify-between">
@@ -138,14 +160,9 @@ export default function ClientTimelineView() {
             <p className="text-xs text-zinc-400">按发行时间浏览音乐时间线</p>
           </div>
         </div>
-        <div
-          onClick={() => router.push(authed ? "/client" : "/client/auth?next=%2Fclient")}
-          role="button" tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(authed ? "/client" : "/client/auth?next=%2Fclient"); }}
-          className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition ${authed ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-zinc-700 bg-zinc-900/70 text-zinc-200 hover:border-zinc-500"}`}
-        >
+        <div className="cursor-pointer rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-300">
           <span className="mr-2 inline-block h-2 w-2 rounded-full bg-current align-middle opacity-90" />
-          {authed ? "在线中" : "登录 / 注册"}
+          在线中
         </div>
       </div>
 
