@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../AuthContext";
 
-type Me = { id: string; phone: string; role: string; nickname?: string | null };
 type CatSong = { id: string; song: { id: string; name: string; artist: string } };
 type Cat = { id: string; name: string; isSystem: boolean; songs: CatSong[] };
 
@@ -20,7 +20,7 @@ const GRADIENTS = [
 
 export default function ProfileView() {
   const router = useRouter();
-  const [me, setMe] = useState<Me | null>(null);
+  const { checked: authChecked, user, refresh: refreshAuth } = useAuth();
   const [cats, setCats] = useState<Cat[]>([]);
   const [selected, setSelected] = useState<Cat | null>(null);
   const [menuCat, setMenuCat] = useState<Cat | null>(null);
@@ -36,11 +36,8 @@ export default function ProfileView() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((d) => {
-      if (d.success) setMe(d.data);
-    });
-    load();
-  }, []);
+    if (authChecked && user) load();
+  }, [authChecked, user]);
 
   const handleRename = async () => {
     if (!menuCat || !renameName.trim()) return;
@@ -81,29 +78,42 @@ export default function ProfileView() {
     router.push("/");
   };
 
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#060606] to-black p-4 md:p-6">
+        <div className="mb-6 h-20 animate-pulse rounded-2xl bg-zinc-800/40" />
+        <div className="mb-6 grid grid-cols-3 gap-3">{[1,2,3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-800/30" />)}</div>
+        <div className="h-6 w-24 animate-pulse rounded bg-zinc-800/40 mb-4" />
+        <div className="grid grid-cols-3 gap-2.5">{[1,2,3].map((i) => <div key={i} className="aspect-[4/3] animate-pulse rounded-2xl bg-zinc-800/30" />)}</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#060606] to-black p-4">
+        <p className="mb-4 text-sm text-zinc-400">请先登录</p>
+        <button type="button" onClick={() => router.push("/client/auth?next=/client/profile")} className="rounded-xl bg-red-600 px-6 py-2.5 text-sm font-medium text-white">登录 / 注册</button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#060606] to-black p-4 text-zinc-100 md:p-6">
       {/* User info */}
       <div className="mb-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-5">
-        {me ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-fuchsia-600 text-xl font-bold text-white shadow-lg">
-                {(me.nickname || me.phone)?.[0] || "U"}
-              </div>
-              <div>
-                <p className="text-lg font-semibold">{me.nickname || "音乐用户"}</p>
-                <p className="text-xs text-zinc-400">{me.phone}</p>
-              </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-fuchsia-600 text-xl font-bold text-white shadow-lg">
+              {(user.nickname || user.phone)?.[0] || "U"}
             </div>
-            <button type="button" onClick={handleLogout} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200">退出登录</button>
+            <div>
+              <p className="text-lg font-semibold">{user.nickname || "音乐用户"}</p>
+              <p className="text-xs text-zinc-400">{user.phone}</p>
+            </div>
           </div>
-        ) : (
-          <div className="text-center">
-            <p className="text-sm text-zinc-400 mb-3">请先登录</p>
-            <button type="button" onClick={() => router.push("/client/auth?next=/client/profile")} className="rounded-xl bg-red-600 px-6 py-2.5 text-sm font-medium text-white">登录 / 注册</button>
-          </div>
-        )}
+          <button type="button" onClick={handleLogout} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200">退出登录</button>
+        </div>
       </div>
 
       {/* Stats */}

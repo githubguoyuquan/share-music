@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "./AuthContext";
 import SongTimelineList from "./_components/SongTimelineList";
 import SongDetailSheet from "./_components/SongDetailSheet";
 
@@ -21,9 +22,9 @@ type Song = {
 type UserCategory = { id: string; name: string; isSystem: boolean; songs?: { songId?: string; song?: { id: string } }[] };
 
 export default function ClientTimelineView() {
+  const { checked: authChecked, user } = useAuth();
+  const authed = Boolean(user);
   const [songs, setSongs] = useState<Song[]>([]);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authed, setAuthed] = useState(false);
   const [categories, setCategories] = useState<UserCategory[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -33,6 +34,7 @@ export default function ClientTimelineView() {
   const [detailLoading, setDetailLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
+  const initialLoaded = useRef(false);
 
   const loadPage = async (nextPage: number) => {
     if (loadingMore) return;
@@ -61,16 +63,13 @@ export default function ClientTimelineView() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then((d) => {
-      const ok = Boolean(d?.success);
-      setAuthed(ok);
-      setAuthChecked(true);
-      if (ok) {
-        loadCategories();
-        loadPage(1);
-      }
-    });
-  }, []);
+    if (!authChecked || initialLoaded.current) return;
+    if (authed) {
+      initialLoaded.current = true;
+      loadCategories();
+      loadPage(1);
+    }
+  }, [authChecked, authed]);
 
   useEffect(() => {
     const el = sentinelRef.current;

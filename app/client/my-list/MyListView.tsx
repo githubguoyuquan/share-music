@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "../AuthContext";
 import SongTimelineList from "../_components/SongTimelineList";
 import SongDetailSheet from "../_components/SongDetailSheet";
 
@@ -23,6 +24,7 @@ type Cat = { id: string; name: string; isSystem: boolean; songs: { song: Song; i
 
 export default function MyListView() {
   const router = useRouter();
+  const { checked: authChecked, user } = useAuth();
   const [cats, setCats] = useState<Cat[]>([]);
   const [activeCatId, setActiveCatId] = useState<string>("all");
   const [detailSong, setDetailSong] = useState<Song | null>(null);
@@ -30,11 +32,14 @@ export default function MyListView() {
 
   const load = async () => {
     const res = await fetch("/api/client/user-categories");
+    if (!res.ok) return;
     const data = await res.json();
     if (data.success) setCats(data.data);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (authChecked && user) load();
+  }, [authChecked, user]);
 
   const allSongs = useMemo(() => {
     const map = new Map<string, Song>();
@@ -79,6 +84,24 @@ export default function MyListView() {
     });
     await load();
   };
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#060606] to-black p-4 md:p-6">
+        <div className="mb-4 h-10 animate-pulse rounded-full bg-zinc-800/40" />
+        <div className="space-y-3">{[1,2,3].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-800/30" />)}</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#060606] to-black p-4">
+        <p className="mb-4 text-sm text-zinc-400">请先登录查看收藏</p>
+        <button type="button" onClick={() => router.push("/client/auth?next=/client/my-list")} className="rounded-xl bg-red-600 px-6 py-2.5 text-sm font-medium text-white">登录 / 注册</button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#060606] to-black p-4 text-zinc-100 md:p-6">
