@@ -78,7 +78,7 @@ export default function ProfileView() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/me", { method: "DELETE" });
-    router.push("/client/auth");
+    router.push("/");
   };
 
   return (

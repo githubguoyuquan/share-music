@@ -15,3 +15,9 @@ export async function POST() {
   res.cookies.set("token", "", { path: "/", maxAge: 0 });
   return res;
 }
+
+export async function DELETE() {
+  const res = NextResponse.json({ success: true });
+  res.cookies.set("token", "", { path: "/", maxAge: 0 });
+  return res;
+}
