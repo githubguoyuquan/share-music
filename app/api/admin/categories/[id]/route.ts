@@ -11,6 +11,8 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   const parsed = categorySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "参数错误" }, { status: 400 });
   const { name, color } = parsed.data;
+  const existing = await prisma.songCategory.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ success: false, error: "分类不存在" }, { status: 404 });
   const data = await prisma.songCategory.update({ where: { id }, data: { name: name.trim(), color: color || null } });
   return NextResponse.json({ success: true, data });
 }
@@ -18,8 +20,10 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
 export async function DELETE(req: NextRequest, ctx: Ctx) {
   if (!requireAdmin(req)) return NextResponse.json({ success: false, error: "无权限" }, { status: 403 });
   const { id } = await ctx.params;
+  const existing = await prisma.songCategory.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ success: false, error: "分类不存在" }, { status: 404 });
   const bindCount = await prisma.songCategoryMap.count({ where: { categoryId: id } });
-  if (bindCount > 0) return NextResponse.json({ success: false, error: "该分类下仍有关联歌曲，请先调整" }, { status: 400 });
+  if (bindCount > 0) return NextResponse.json({ success: false, error: `该分类下仍有 ${bindCount} 首关联歌曲，请先调整` }, { status: 400 });
   await prisma.songCategory.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }
