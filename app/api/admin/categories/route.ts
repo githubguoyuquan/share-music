@@ -5,7 +5,7 @@ import { categorySchema } from "@/app/lib/validators";
 
 export async function GET(req: NextRequest) {
   if (!requireAdmin(req)) return NextResponse.json({ success: false, error: "无权限" }, { status: 403 });
-  const data = await prisma.songCategory.findMany({ orderBy: { createdAt: "desc" } });
+  const data = await prisma.songCategory.findMany({ orderBy: { createdAt: "desc" }, include: { _count: { select: { songs: true } } } });
   return NextResponse.json({ success: true, data });
 }
 
