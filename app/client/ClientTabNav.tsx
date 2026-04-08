@@ -43,6 +43,8 @@ export default function ClientTabNav() {
   const [visible, setVisible] = useState(true);
   const lastY = useRef(0);
 
+  const hidden = pathname.startsWith("/client/auth");
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -55,6 +57,8 @@ export default function ClientTabNav() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  if (hidden) return null;
 
   return (
     <nav
