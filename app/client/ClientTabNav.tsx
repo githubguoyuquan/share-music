@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FC } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { clientScrollStorageKey } from "./ClientScrollRestoration";
 
 const tabs: { href: string; label: string; Icon: FC<{ className?: string }> }[] = [
   {
@@ -64,7 +65,7 @@ export default function ClientTabNav() {
     <nav
       className={`fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur transition-transform duration-300 ${visible ? "translate-y-0" : "translate-y-full"}`}
     >
-      <div className="mx-auto grid max-w-3xl grid-cols-3 gap-1 px-2 py-2">
+      <div className="mx-auto grid max-w-3xl grid-cols-3 gap-0 px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         {tabs.map(({ href, label, Icon }) => {
           let active = false;
           if (mounted) {
@@ -79,10 +80,14 @@ export default function ClientTabNav() {
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2 transition ${active ? "text-red-500" : "text-zinc-400 hover:text-zinc-200"}`}
+              scroll={false}
+              onClick={() => {
+                sessionStorage.setItem(clientScrollStorageKey(pathname), String(window.scrollY));
+              }}
+              className={`flex flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 transition ${active ? "text-red-500" : "text-zinc-400 hover:text-zinc-200"}`}
             >
-              <Icon className="h-6 w-6" />
-              <span className="text-[11px] font-medium">{label}</span>
+              <Icon className="h-6 w-6 shrink-0" />
+              <span className="text-sm font-medium leading-tight">{label}</span>
             </Link>
           );
         })}

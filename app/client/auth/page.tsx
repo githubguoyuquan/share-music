@@ -21,7 +21,8 @@ function ClientAuthInner() {
       setError("请输入正确的手机号");
       return;
     }
-    if (password.length < 6) {
+    const trimmedPassword = password.trim();
+    if (trimmedPassword.length < 6) {
       setError("密码至少 6 位");
       return;
     }
@@ -29,7 +30,9 @@ function ClientAuthInner() {
     setError("");
     setSuccess("");
     const url = isLogin ? "/api/auth/login" : "/api/auth/register";
-    const body = isLogin ? { phone: trimmedPhone, password } : { phone: trimmedPhone, password, nickname: nickname.trim() || undefined };
+    const body = isLogin
+      ? { phone: trimmedPhone, password: trimmedPassword }
+      : { phone: trimmedPhone, password: trimmedPassword, nickname: nickname.trim() || undefined };
     try {
       const res = await fetch(url, {
         method: "POST",

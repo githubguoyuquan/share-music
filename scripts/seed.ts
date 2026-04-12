@@ -27,12 +27,18 @@ const songNames = [
 ];
 
 async function main() {
-  await prisma.user.deleteMany();
+  // Keep existing users/categories to avoid wiping real user-created data.
   await prisma.songCategory.deleteMany();
   await prisma.song.deleteMany();
 
-  const admin = await prisma.user.create({
-    data: {
+  const admin = await prisma.user.upsert({
+    where: { phone: "13800000000" },
+    update: {
+      nickname: "管理员",
+      role: "admin",
+      passwordHash: await bcrypt.hash("Admin@123456", 12),
+    },
+    create: {
       phone: "13800000000",
       nickname: "管理员",
       role: "admin",
@@ -40,8 +46,14 @@ async function main() {
     },
   });
 
-  const user = await prisma.user.create({
-    data: {
+  const user = await prisma.user.upsert({
+    where: { phone: "13900000000" },
+    update: {
+      nickname: "测试用户",
+      role: "user",
+      passwordHash: await bcrypt.hash("User@123456", 12),
+    },
+    create: {
       phone: "13900000000",
       nickname: "测试用户",
       role: "user",
@@ -49,15 +61,27 @@ async function main() {
     },
   });
 
-  const songCats = await Promise.all(["华语精选", "欧美热歌", "跑步", "学习", "夜晚", "通勤"].map((name) =>
-    prisma.songCategory.create({ data: { name, color: "#ef4444" } })
-  ));
+  const parentCats = await Promise.all([
+    prisma.songCategory.create({ data: { name: "语种", color: "#ef4444" } }),
+    prisma.songCategory.create({ data: { name: "场景", color: "#3b82f6" } }),
+  ]);
+  const songCats = await Promise.all([
+    prisma.songCategory.create({ data: { name: "华语精选", color: "#ef4444", parentId: parentCats[0].id } }),
+    prisma.songCategory.create({ data: { name: "欧美热歌", color: "#ef4444", parentId: parentCats[0].id } }),
+    prisma.songCategory.create({ data: { name: "跑步", color: "#3b82f6", parentId: parentCats[1].id } }),
+    prisma.songCategory.create({ data: { name: "学习", color: "#3b82f6", parentId: parentCats[1].id } }),
+    prisma.songCategory.create({ data: { name: "夜晚", color: "#3b82f6", parentId: parentCats[1].id } }),
+    prisma.songCategory.create({ data: { name: "通勤", color: "#3b82f6", parentId: parentCats[1].id } }),
+  ]);
 
-  await prisma.userCategory.createMany({
-    data: [
-      { userId: user.id, name: "喜欢", isSystem: true },
-      { userId: user.id, name: "我的歌单", isSystem: false },
-    ],
+  await prisma.userCategory.upsert({
+    where: { userId_name: { userId: user.id, name: "喜欢" } },
+    update: { isSystem: true },
+    create: { userId: user.id, name: "喜欢", isSystem: true },
+  });
+  // Remove legacy default category.
+  await prisma.userCategory.deleteMany({
+    where: { userId: user.id, name: "我的歌单" },
   });
 
   for (let i = 0; i < 108; i++) {
@@ -69,7 +93,7 @@ async function main() {
         durationSec: 140 + (i % 180),
         releaseDate: new Date(Date.now() - i * 24 * 3600 * 1000),
         genre: genres[i % genres.length],
-        coverUrl: null,
+        coverUrl: `https://picsum.photos/seed/music-cover-${i + 1}/600/600`,
         qqMusicUrl: `qqmusic://song/${i + 1}`,
         neteaseUrl: `orpheus://song/${i + 1}`,
         qishuiUrl: `qishui://song/${i + 1}`,
@@ -88,6 +112,9 @@ async function main() {
   }
 
   console.log("Seed done: 108 songs");
+  console.log("Test logins (phone / password):");
+  console.log("  Admin: 13800000000 / Admin@123456");
+  console.log("  User:  13900000000 / User@123456");
 }
 
 main().finally(async () => {

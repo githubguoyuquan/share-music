@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthContext";
+import useBodyScrollLock from "../_hooks/useBodyScrollLock";
 
 type CatSong = { id: string; song: { id: string; name: string; artist: string } };
 type Cat = { id: string; name: string; isSystem: boolean; songs: CatSong[] };
@@ -17,6 +18,7 @@ const GRADIENTS = [
   "from-cyan-600/70 to-sky-900/80",
   "from-lime-600/70 to-green-900/80",
 ];
+const SHEET_MS = 500;
 
 export default function ProfileView() {
   const router = useRouter();
@@ -28,6 +30,34 @@ export default function ProfileView() {
   const [renameName, setRenameName] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [sheetEntered, setSheetEntered] = useState(false);
+  const [closingSelected, setClosingSelected] = useState(false);
+  const [closingMenu, setClosingMenu] = useState(false);
+  const [closingCreate, setClosingCreate] = useState(false);
+
+  useEffect(() => {
+    if (!(selected || menuCat || createOpen)) {
+      setSheetEntered(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setSheetEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [selected, menuCat, createOpen]);
+
+  useBodyScrollLock(Boolean(selected || menuCat || createOpen));
+
+  const closeSelected = () => {
+    setClosingSelected(true);
+    setTimeout(() => { setSelected(null); setClosingSelected(false); }, SHEET_MS);
+  };
+  const closeMenu = () => {
+    setClosingMenu(true);
+    setTimeout(() => { setMenuCat(null); setRenaming(false); setClosingMenu(false); }, SHEET_MS);
+  };
+  const closeCreate = () => {
+    setClosingCreate(true);
+    setTimeout(() => { setCreateOpen(false); setNewCatName(""); setClosingCreate(false); }, SHEET_MS);
+  };
 
   const load = async () => {
     const res = await fetch("/api/client/user-categories");
@@ -177,8 +207,8 @@ export default function ProfileView() {
 
       {/* Category detail bottom sheet */}
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/70" onClick={() => setSelected(null)} role="presentation">
-          <div className="w-full max-h-[75vh] rounded-t-2xl bg-zinc-900 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className={`fixed inset-0 z-50 flex items-end bg-black/70 transition-opacity duration-350 ${(sheetEntered && !closingSelected) ? "opacity-100" : "opacity-0"}`} onClick={closeSelected} role="presentation">
+          <div className={`w-full max-h-[75vh] rounded-t-2xl bg-zinc-900 overflow-hidden transform-gpu will-change-transform transition-transform duration-500 ease-out ${(sheetEntered && !closingSelected) ? "translate-y-0" : "translate-y-6"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-zinc-600" /></div>
             <div className="px-5 pb-2 pt-2 flex items-center justify-between">
               <div>
@@ -217,8 +247,8 @@ export default function ProfileView() {
 
       {/* Three-dot menu sheet */}
       {menuCat ? (
-        <div className="fixed inset-0 z-[60] flex items-end bg-black/70" onClick={() => { setMenuCat(null); setRenaming(false); }} role="presentation">
-          <div className="w-full rounded-t-2xl bg-zinc-900 pb-6" onClick={(e) => e.stopPropagation()}>
+        <div className={`fixed inset-0 z-[60] flex items-end bg-black/70 transition-opacity duration-350 ${(sheetEntered && !closingMenu) ? "opacity-100" : "opacity-0"}`} onClick={closeMenu} role="presentation">
+          <div className={`w-full rounded-t-2xl bg-zinc-900 pb-6 transform-gpu will-change-transform transition-transform duration-500 ease-out ${(sheetEntered && !closingMenu) ? "translate-y-0" : "translate-y-6"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pt-3 pb-2"><div className="h-1 w-10 rounded-full bg-zinc-600" /></div>
             <p className="px-5 pb-3 text-sm font-semibold text-zinc-300">管理「{menuCat.name}」</p>
 
@@ -246,15 +276,15 @@ export default function ProfileView() {
               </div>
             )}
 
-            <button type="button" onClick={() => { setMenuCat(null); setRenaming(false); }} className="mt-2 w-full text-center text-xs text-zinc-500">取消</button>
+            <button type="button" onClick={closeMenu} className="mt-2 w-full text-center text-xs text-zinc-500">取消</button>
           </div>
         </div>
       ) : null}
 
       {/* Create category sheet */}
       {createOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-end bg-black/70" onClick={() => { setCreateOpen(false); setNewCatName(""); }} role="presentation">
-          <div className="w-full rounded-t-2xl bg-zinc-900 p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+        <div className={`fixed inset-0 z-[60] flex items-end bg-black/70 transition-opacity duration-350 ${(sheetEntered && !closingCreate) ? "opacity-100" : "opacity-0"}`} onClick={closeCreate} role="presentation">
+          <div className={`w-full rounded-t-2xl bg-zinc-900 p-5 pb-8 transform-gpu will-change-transform transition-transform duration-500 ease-out ${(sheetEntered && !closingCreate) ? "translate-y-0" : "translate-y-6"}`} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-center pb-3"><div className="h-1 w-10 rounded-full bg-zinc-600" /></div>
             <p className="mb-3 text-sm font-semibold text-zinc-200">新建分类</p>
             <div className="flex gap-2">

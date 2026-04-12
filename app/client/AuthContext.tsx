@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 
 type User = { id: string; phone: string; role: string; nickname?: string | null };
 
@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return <AuthCtx.Provider value={{ checked, user, refresh }}>{children}</AuthCtx.Provider>;
+  const value = useMemo(() => ({ checked, user, refresh }), [checked, user, refresh]);
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
 export function useAuth() {

@@ -53,9 +53,14 @@ model SongCategory {
   id        String            @id @default(uuid())
   name      String            @unique
   color     String?
+  parentId  String?
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  parent    SongCategory?     @relation("SongCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  SongCategory[]    @relation("SongCategoryTree")
   songs     SongCategoryMap[]
+
+  @@index([parentId])
 }
 
 model SongCategoryMap {

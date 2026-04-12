@@ -3,8 +3,8 @@ import { z } from "zod";
 export const phoneRegex = /^1[3-9]\d{9}$/;
 
 export const authSchema = z.object({
-  phone: z.string().regex(phoneRegex, "手机号格式错误"),
-  password: z.string().min(6, "密码至少6位").max(64, "密码过长"),
+  phone: z.string().trim().regex(phoneRegex, "手机号格式错误"),
+  password: z.string().trim().min(6, "密码至少6位").max(64, "密码过长"),
   nickname: z.string().max(32, "昵称过长").optional(),
 });
 

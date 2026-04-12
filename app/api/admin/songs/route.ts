@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         }
       : {};
     const [items, total] = await Promise.all([
-      prisma.song.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy: [{ releaseDate: "desc" }, { createdAt: "desc" }], include: { categories: { include: { category: true } } } }),
+      prisma.song.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy: [{ createdAt: "desc" }, { releaseDate: "desc" }], include: { categories: { include: { category: true } } } }),
       prisma.song.count({ where }),
     ]);
     return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };

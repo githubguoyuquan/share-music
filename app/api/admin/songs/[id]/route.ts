@@ -23,10 +23,11 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
       releaseDate: body.releaseDate ? new Date(body.releaseDate) : existing.releaseDate,
       genre: body.genre ?? existing.genre,
       coverUrl: body.coverUrl !== undefined ? body.coverUrl : existing.coverUrl,
-      qqMusicUrl: body.qqMusicUrl !== undefined ? body.qqMusicUrl : existing.qqMusicUrl,
-      neteaseUrl: body.neteaseUrl !== undefined ? body.neteaseUrl : existing.neteaseUrl,
-      qishuiUrl: body.qishuiUrl !== undefined ? body.qishuiUrl : existing.qishuiUrl,
-      kuwoUrl: body.kuwoUrl !== undefined ? body.kuwoUrl : existing.kuwoUrl,
+      // Platform links are generated dynamically on client side by song name/artist.
+      qqMusicUrl: null,
+      neteaseUrl: null,
+      qishuiUrl: null,
+      kuwoUrl: null,
     },
   });
 

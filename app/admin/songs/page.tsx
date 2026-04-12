@@ -2,18 +2,17 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-type Category = { id: string; name: string; color: string | null };
+type Category = { id: string; name: string; color: string | null; parentId?: string | null };
 type Song = {
   id: string; name: string; artist: string; album: string;
   durationSec: number; releaseDate: string; genre: string;
-  coverUrl: string | null; qqMusicUrl: string | null; neteaseUrl: string | null;
-  qishuiUrl: string | null; kuwoUrl: string | null;
+  coverUrl: string | null;
   categories?: { category: Category }[];
 };
 
 const EMPTY_FORM = {
-  name: "", artist: "", album: "", durationSec: 180, releaseDate: "2024-01-01",
-  genre: "流行", coverUrl: "", qqMusicUrl: "", neteaseUrl: "", qishuiUrl: "", kuwoUrl: "",
+  name: "", artist: "", album: "", durationSec: "", releaseDate: "",
+  genre: "", coverUrl: "",
   categoryIds: [] as string[],
 };
 
@@ -26,9 +25,23 @@ function fmtDuration(sec: number) {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
+function fmtDateDisplay(v: string) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function fmtDurationDisplay(v: string) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
+}
+
 export default function AdminSongsPage() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [activeParentCategoryId, setActiveParentCategoryId] = useState<string>("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -39,8 +52,13 @@ export default function AdminSongsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [activeChildCategoryId, setActiveChildCategoryId] = useState<string>("");
   const [formLoading, setFormLoading] = useState(false);
   const [formMsg, setFormMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [metaLoadingArtists, setMetaLoadingArtists] = useState(false);
+  const [metaLoadingFill, setMetaLoadingFill] = useState(false);
+  const [artistOptions, setArtistOptions] = useState<string[]>([]);
+  const [pickedArtist, setPickedArtist] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<Song | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -64,7 +82,7 @@ export default function AdminSongsPage() {
   }, [page, q]);
 
   const loadCategories = async () => {
-    const res = await fetch("/api/admin/categories");
+    const res = await fetch("/api/admin/categories?flat=1");
     const data = await res.json();
     if (data.success) setAllCategories(data.data);
   };
@@ -76,6 +94,10 @@ export default function AdminSongsPage() {
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setActiveParentCategoryId("");
+    setActiveChildCategoryId("");
+    setArtistOptions([]);
+    setPickedArtist("");
     setFormMsg(null);
     setShowForm(true);
   };
@@ -83,14 +105,39 @@ export default function AdminSongsPage() {
   const openEdit = (s: Song) => {
     setEditingId(s.id);
     setForm({
-      name: s.name, artist: s.artist, album: s.album, durationSec: s.durationSec,
+      name: s.name, artist: s.artist, album: s.album, durationSec: String(s.durationSec),
       releaseDate: fmtDate(s.releaseDate), genre: s.genre,
-      coverUrl: s.coverUrl || "", qqMusicUrl: s.qqMusicUrl || "",
-      neteaseUrl: s.neteaseUrl || "", qishuiUrl: s.qishuiUrl || "", kuwoUrl: s.kuwoUrl || "",
+      coverUrl: s.coverUrl || "",
       categoryIds: s.categories?.map((c) => c.category.id) || [],
     });
+    const firstChild = childCategories.find((c) => (s.categories?.some((sc) => sc.category.id === c.id)));
+    setActiveParentCategoryId(firstChild?.parentId || "");
+    setActiveChildCategoryId("");
+    setArtistOptions([]);
+    setPickedArtist(s.artist);
     setFormMsg(null);
     setShowForm(true);
+  };
+
+  const fetchArtistsBySongName = async () => {
+    if (!form.name.trim()) { setFormMsg({ type: "err", text: "请先输入歌曲名" }); return; }
+    setMetaLoadingArtists(true);
+    try {
+      const res = await fetch(`/api/admin/song-meta?name=${encodeURIComponent(form.name.trim())}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "抓取歌手失败" }); return; }
+      const artists: string[] = Array.isArray(data.data?.artists) ? data.data.artists : [];
+      setArtistOptions(artists);
+      if (!artists.length) { setFormMsg({ type: "err", text: "未找到可选歌手" }); return; }
+      const nextArtist = artists.includes(form.artist) ? form.artist : artists[0];
+      setPickedArtist(nextArtist);
+      setForm((f) => ({ ...f, artist: nextArtist }));
+      setFormMsg({ type: "ok", text: `已抓取 ${artists.length} 位歌手候选` });
+    } catch {
+      setFormMsg({ type: "err", text: "网络错误" });
+    } finally {
+      setMetaLoadingArtists(false);
+    }
   };
 
   const submitForm = async () => {
@@ -100,7 +147,8 @@ export default function AdminSongsPage() {
     try {
       const url = editingId ? `/api/admin/songs/${editingId}` : "/api/admin/songs";
       const method = editingId ? "PUT" : "POST";
-      const body = { ...form, durationSec: Number(form.durationSec), coverUrl: form.coverUrl || null, qqMusicUrl: form.qqMusicUrl || null, neteaseUrl: form.neteaseUrl || null, qishuiUrl: form.qishuiUrl || null, kuwoUrl: form.kuwoUrl || null };
+      const allowedChildIds = new Set(childCategories.map((c) => c.id));
+      const body = { ...form, categoryIds: form.categoryIds.filter((id) => allowedChildIds.has(id)), durationSec: Number(form.durationSec || 0), coverUrl: form.coverUrl || null };
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "操作失败" }); return; }
@@ -131,6 +179,10 @@ export default function AdminSongsPage() {
   };
 
   const setField = (key: string, value: string | number) => setForm((f) => ({ ...f, [key]: value }));
+  const parentCategories = allCategories.filter((c) => !(c as Category & { parentId?: string | null }).parentId);
+  const childCategories = allCategories.filter((c) => Boolean((c as Category & { parentId?: string | null }).parentId)) as (Category & { parentId?: string | null })[];
+  const visibleChildCategories = childCategories.filter((c) => !activeParentCategoryId || c.parentId === activeParentCategoryId);
+  const selectedChildCategories = childCategories.filter((c) => form.categoryIds.includes(c.id));
 
   return (
     <div>
@@ -235,43 +287,125 @@ export default function AdminSongsPage() {
             <h2 className="mb-5 text-lg font-bold">{editingId ? "编辑歌曲" : "添加歌曲"}</h2>
 
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="歌曲名 *" value={form.name} onChange={(v) => setField("name", v)} />
-                <Field label="歌手 *" value={form.artist} onChange={(v) => setField("artist", v)} />
-                <Field label="专辑 *" value={form.album} onChange={(v) => setField("album", v)} />
-                <Field label="流派" value={form.genre} onChange={(v) => setField("genre", v)} />
-                <Field label="时长（秒）" value={String(form.durationSec)} onChange={(v) => setField("durationSec", v)} type="number" />
-                <Field label="发行日期" value={form.releaseDate.slice(0, 10)} onChange={(v) => setField("releaseDate", v)} type="date" />
-              </div>
-
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-xs font-medium text-zinc-500">音乐平台链接</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="QQ音乐" value={form.qqMusicUrl} onChange={(v) => setField("qqMusicUrl", v)} placeholder="链接或搜索关键词" />
-                  <Field label="网易云" value={form.neteaseUrl} onChange={(v) => setField("neteaseUrl", v)} placeholder="链接或搜索关键词" />
-                  <Field label="汽水音乐" value={form.qishuiUrl} onChange={(v) => setField("qishuiUrl", v)} placeholder="链接或搜索关键词" />
-                  <Field label="酷我音乐" value={form.kuwoUrl} onChange={(v) => setField("kuwoUrl", v)} placeholder="链接或搜索关键词" />
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                <p className="mb-2 text-xs font-medium text-zinc-500">自动抓取（歌名 → 歌手候选 → 元信息填充）</p>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      value={form.name}
+                      onChange={(e) => setField("name", e.target.value)}
+                      placeholder="先输入歌曲名"
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-red-500/50"
+                    />
+                    <button type="button" onClick={fetchArtistsBySongName} disabled={metaLoadingArtists || metaLoadingFill} className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50">
+                      {metaLoadingArtists ? "检索中..." : "检索歌手"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <select
+                      value={pickedArtist}
+                      onChange={async (e) => {
+                        const next = e.target.value;
+                        setPickedArtist(next);
+                        setField("artist", next);
+                        if (!next) return;
+                        setMetaLoadingFill(true);
+                        try {
+                          const url = `/api/admin/song-meta?name=${encodeURIComponent(form.name.trim())}&artist=${encodeURIComponent(next.trim())}`;
+                          const res = await fetch(url);
+                          const data = await res.json();
+                          if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "自动填充失败" }); return; }
+                          const meta = data.data || {};
+                          setForm((f) => ({
+                            ...f,
+                            name: meta.name || f.name,
+                            artist: meta.artist || next,
+                            album: meta.album || f.album,
+                            durationSec: String(meta.durationSec ?? f.durationSec ?? ""),
+                            releaseDate: String(meta.releaseDate || f.releaseDate || "").slice(0, 10),
+                            genre: meta.genre || f.genre,
+                            coverUrl: meta.coverUrl || f.coverUrl,
+                          }));
+                          setFormMsg({ type: "ok", text: "已根据所选歌手自动填充元信息" });
+                        } catch {
+                          setFormMsg({ type: "err", text: "网络错误" });
+                        } finally {
+                          setMetaLoadingFill(false);
+                        }
+                      }}
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200"
+                    >
+                    <option value="">{artistOptions.length ? "选择歌手" : "先抓取歌手列表"}</option>
+                    {artistOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  </div>
                 </div>
               </div>
 
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="mb-2 text-xs font-medium text-zinc-500">封面图片</p>
-                <Field label="封面 URL" value={form.coverUrl} onChange={(v) => setField("coverUrl", v)} placeholder="https://..." />
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+                <p className="mb-2 text-xs font-medium text-zinc-500">歌曲元信息参数</p>
+                <div className="space-y-2">
+                  <ParamDisplay label="歌手" value={form.artist} />
+                  <ParamDisplay label="专辑" value={form.album} />
+                  <ParamDisplay label="流派" value={form.genre} />
+                  <ParamDisplay label="时长" value={fmtDurationDisplay(String(form.durationSec))} />
+                  <ParamDisplay label="发行日期" value={fmtDateDisplay(form.releaseDate)} />
+                  <ParamDisplay label="封面URL" value={form.coverUrl} />
+                </div>
               </div>
+
+              {form.coverUrl ? (
+                <div className="border-t border-zinc-800 pt-4">
+                  <p className="mb-2 text-xs font-medium text-zinc-500">封面图片预览</p>
+                  <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={form.coverUrl} alt="封面预览" className="h-40 w-40 rounded-lg object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                  </div>
+                </div>
+              ) : null}
 
               {allCategories.length > 0 && (
                 <div className="border-t border-zinc-800 pt-4">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">所属分类</p>
-                  <div className="flex flex-wrap gap-2">
-                    {allCategories.map((c) => {
-                      const selected = form.categoryIds.includes(c.id);
-                      return (
-                        <button key={c.id} type="button" onClick={() => toggleCategory(c.id)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${selected ? "border-red-600/50 bg-red-600/20 text-red-300" : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"}`}>
-                          <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: c.color || "#666" }} />
-                          {c.name}
-                        </button>
-                      );
-                    })}
+                  <p className="mb-2 text-xs font-medium text-zinc-500">所属分类（二级级联选择）</p>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <select
+                      value={activeParentCategoryId}
+                      onChange={(e) => { setActiveParentCategoryId(e.target.value); setActiveChildCategoryId(""); }}
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"
+                    >
+                      <option value="">选择一级分类</option>
+                      {parentCategories.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={activeChildCategoryId}
+                      onChange={(e) => setActiveChildCategoryId(e.target.value)}
+                      disabled={!activeParentCategoryId || visibleChildCategories.length === 0}
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200 disabled:opacity-50"
+                    >
+                      <option value="">{activeParentCategoryId ? "选择二级分类" : "请先选一级"}</option>
+                      {visibleChildCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!activeChildCategoryId}
+                      onClick={() => { if (activeChildCategoryId) toggleCategory(activeChildCategoryId); }}
+                      className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      添加
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedChildCategories.map((c) => (
+                      <button key={c.id} type="button" onClick={() => toggleCategory(c.id)} className="rounded-lg border border-red-600/40 bg-red-600/15 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-600/25">
+                        <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: c.color || "#666" }} />
+                        {c.name} ×
+                      </button>
+                    ))}
+                    {selectedChildCategories.length === 0 ? <p className="text-xs text-zinc-500">尚未选择二级分类</p> : null}
                   </div>
                 </div>
               )}
@@ -313,6 +447,15 @@ function Field({ label, value, onChange, type = "text", placeholder }: { label: 
     <div>
       <label className="mb-1 block text-xs font-medium text-zinc-500">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || label} className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm outline-none transition focus:border-red-500/50" />
+    </div>
+  );
+}
+
+function ParamDisplay({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[100px_1fr] items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-2 py-1.5">
+      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="truncate text-sm text-zinc-200">{value || "—"}</span>
     </div>
   );
 }

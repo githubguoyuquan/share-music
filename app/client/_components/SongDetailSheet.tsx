@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useState, type CSSProperties } from "react";
+import useBodyScrollLock from "../_hooks/useBodyScrollLock";
 
 type Song = {
   id: string;
   name: string;
   artist: string;
   album: string;
+  coverUrl?: string | null;
   genre?: string;
   durationSec?: number;
   releaseDate?: string;
@@ -28,6 +30,7 @@ type Props = {
   onCollect: (songId: string, categoryId: string) => Promise<void> | void;
   onCreateCategory: (name: string) => Promise<void> | void;
 };
+const SHEET_MS = 720;
 
 const fmt = (sec?: number) => {
   if (sec == null || Number.isNaN(sec)) return "--:--";
@@ -52,6 +55,17 @@ function KuwoIcon({ className }: { className?: string }) {
   return (<svg viewBox="0 0 120 120" className={className} aria-hidden><defs><linearGradient id="kw" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#4DA3FF"/><stop offset="100%" stopColor="#2D6BFF"/></linearGradient></defs><rect rx="26" width="120" height="120" fill="url(#kw)"/><path d="M42 30v60" stroke="#fff" strokeWidth="8" strokeLinecap="round"/><path d="M44 60L72 36" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/><path d="M44 60L72 84" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/><circle cx="82" cy="36" r="7" fill="#fff"/><circle cx="82" cy="84" r="7" fill="#fff"/></svg>);
 }
 
+function buildPlatformLinks(song: Song) {
+  const keyword = `${song.name} ${song.artist}`.trim();
+  const q = encodeURIComponent(keyword);
+  return {
+    qq: `https://y.qq.com/n/ryqq/search?w=${q}`,
+    netease: `https://music.163.com/#/search/m/?s=${q}&type=1`,
+    qishui: `https://www.douyin.com/search/${q}?type=music`,
+    kuwo: `https://www.kuwo.cn/search/list?key=${q}`,
+  };
+}
+
 function PlayBtn({ label, href, icon }: { label: string; href: string | null | undefined; icon: React.ReactNode }) {
   const inner = (<><span className="flex h-14 w-14 items-center justify-center">{icon}</span><span className="mt-1">{label}</span></>);
   if (!href) return <div className="flex flex-1 flex-col items-center justify-center rounded-xl py-3 text-[11px] font-medium text-zinc-500 opacity-60">{inner}</div>;
@@ -67,30 +81,37 @@ function CollectMenu({
   onOpenCreate: () => void;
   onClose: () => void;
 }) {
-  const likeCat = categories.find((c) => c.name === "喜欢");
-  const rest = categories.filter((c) => c.name !== "喜欢");
-  const sorted = likeCat ? [likeCat, ...rest] : rest;
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const closeWithAnim = () => {
+    setEntered(false);
+    setTimeout(onClose, SHEET_MS);
+  };
+  const sorted = categories;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end bg-black/70" onClick={onClose} role="presentation">
-      <div className="w-full rounded-t-2xl bg-zinc-900 pb-6" onClick={(e) => e.stopPropagation()}>
+    <div className={`fixed inset-0 z-[60] flex items-end bg-black/70 transition-opacity duration-500 ${entered ? "opacity-100" : "opacity-0"}`} onClick={closeWithAnim} role="presentation">
+      <div className={`w-full rounded-t-2xl bg-zinc-900 pb-6 transform-gpu will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${entered ? "translate-y-0" : "translate-y-16"}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-center pt-3 pb-2"><div className="h-1 w-10 rounded-full bg-zinc-600" /></div>
-        <p className="px-5 pb-3 text-sm font-semibold text-zinc-300">收藏到分类</p>
+        <p className="px-5 pb-3 text-base font-semibold text-zinc-200">收藏到分类</p>
         <div className="max-h-[50vh] overflow-y-auto px-3">
-          <button type="button" onClick={onOpenCreate} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-800">
+          <button type="button" onClick={onOpenCreate} className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left transition hover:bg-zinc-800">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-zinc-600 text-lg text-zinc-400">＋</span>
-            <span className="text-sm font-medium text-zinc-200">新建分类</span>
+            <span className="text-base font-medium text-zinc-100">新建分类</span>
           </button>
           {sorted.map((cat) => (
-            <button key={cat.id} type="button" onClick={() => onPick(cat.id)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-zinc-800">
+            <button key={cat.id} type="button" onClick={() => onPick(cat.id)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3.5 text-left transition hover:bg-zinc-800">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-base">
                 {cat.name === "喜欢" ? "❤️" : "📁"}
               </span>
-              <span className="text-sm text-zinc-100">{cat.name}</span>
+              <span className="text-base text-zinc-100">{cat.name}</span>
             </button>
           ))}
         </div>
-        <button type="button" onClick={onClose} className="mt-2 w-full px-5 text-center text-xs text-zinc-500">取消</button>
+        <button type="button" onClick={closeWithAnim} className="mt-2 w-full px-5 text-center text-sm text-zinc-500">取消</button>
       </div>
     </div>
   );
@@ -98,14 +119,23 @@ function CollectMenu({
 
 function CreateCategorySheet({ onSubmit, onClose }: { onSubmit: (name: string) => void; onClose: () => void }) {
   const [name, setName] = useState("");
+  const [entered, setEntered] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const closeWithAnim = () => {
+    setEntered(false);
+    setTimeout(onClose, SHEET_MS);
+  };
   return (
-    <div className="fixed inset-0 z-[70] flex items-end bg-black/70" onClick={onClose} role="presentation">
-      <div className="w-full rounded-t-2xl bg-zinc-900 p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+    <div className={`fixed inset-0 z-[70] flex items-end bg-black/70 transition-opacity duration-500 ${entered ? "opacity-100" : "opacity-0"}`} onClick={closeWithAnim} role="presentation">
+      <div className={`w-full rounded-t-2xl bg-zinc-900 p-5 pb-8 transform-gpu will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${entered ? "translate-y-0" : "translate-y-16"}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-center pb-3"><div className="h-1 w-10 rounded-full bg-zinc-600" /></div>
-        <p className="mb-3 text-sm font-semibold text-zinc-200">新建分类</p>
+        <p className="mb-3 text-base font-semibold text-zinc-200">新建分类</p>
         <div className="flex gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="输入分类名称" autoFocus className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-red-500/50" />
-          <button type="button" onClick={() => { if (name.trim()) { onSubmit(name.trim()); } }} className="shrink-0 rounded-xl bg-red-600 px-5 py-3 text-sm font-medium text-white">创建</button>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="输入分类名称" autoFocus className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-base outline-none focus:border-red-500/50" />
+          <button type="button" onClick={() => { if (name.trim()) { onSubmit(name.trim()); } }} className="shrink-0 rounded-xl bg-red-600 px-5 py-3 text-base font-medium text-white">创建</button>
         </div>
       </div>
     </div>
@@ -136,16 +166,77 @@ export default function SongDetailSheet(props: Props) {
   const { open, loading, song, categories, authed, onClose, onCollect, onCreateCategory } = props;
   const [collectOpen, setCollectOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const [rendered, setRendered] = useState(open);
 
-  if (!open) return null;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (open) {
+      setRendered(true);
+      return;
+    }
+    setEntered(false);
+    timer = setTimeout(() => setRendered(false), SHEET_MS);
+    return () => { if (timer) clearTimeout(timer); };
+  }, [open]);
+
+  /* Enter animation must start only after the sheet is actually mounted (rendered === true).
+     Previously, rAF(setEntered(true)) ran while still `return null`, so the first paint already had entered=true. */
+  useLayoutEffect(() => {
+    if (!rendered || !open) return;
+    setEntered(false);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setEntered(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [rendered, open]);
+
+  /* Do not lock / block hits while the sheet is unmounting or mid-close (entered=false):
+     opacity-0 overlay still sits fixed inset-0 and would steal all touches; body touch-action:none would kill list scroll. */
+  useBodyScrollLock((rendered && open && entered) || collectOpen || createOpen);
+
+  if (!rendered) return null;
 
   const palette = song ? HERO_PALETTES[hashIndex(song.id, HERO_PALETTES.length)] : HERO_PALETTES[0];
-  const handleClose = () => { setCollectOpen(false); setCreateOpen(false); onClose(); };
+  const handleClose = () => {
+    setEntered(false);
+    setTimeout(() => {
+      setCollectOpen(false);
+      setCreateOpen(false);
+      onClose();
+    }, SHEET_MS);
+  };
+  const overlayStyle: CSSProperties = {
+    opacity: entered ? 1 : 0,
+    transition: "opacity 520ms cubic-bezier(0.22,1,0.36,1)",
+    pointerEvents: entered ? "auto" : "none",
+  };
+  const panelStyle: CSSProperties = {
+    transform: entered ? "translate3d(0, 0, 0) scale(1)" : "translate3d(0, 96px, 0) scale(0.985)",
+    transition: "transform 760ms cubic-bezier(0.22,1,0.36,1)",
+    /* Parent pointer-events:none does not stop descendants from receiving hits; disable panel too while closing. */
+    pointerEvents: entered ? "auto" : "none",
+  };
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-[2px]" onClick={handleClose} role="presentation">
-        <div className="relative max-h-[88vh] w-full max-w-lg overflow-hidden rounded-t-[1.35rem] border border-zinc-700/80 border-b-0 bg-zinc-950 shadow-[0_-20px_60px_rgba(0,0,0,0.55)]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/70"
+        style={overlayStyle}
+        onClick={handleClose}
+        role="presentation"
+      >
+        <div
+          className="relative max-h-[88vh] w-full max-w-lg overflow-hidden rounded-t-[1.35rem] border border-zinc-700/80 border-b-0 bg-zinc-950 shadow-[0_-10px_28px_rgba(0,0,0,0.45)] transform-gpu will-change-transform"
+          style={panelStyle}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="flex justify-center pt-3 pb-1"><div className="h-1 w-10 rounded-full bg-zinc-600" aria-hidden /></div>
           <div className="max-h-[calc(88vh-2.5rem)] overflow-y-auto px-5 pb-6 pt-1">
             {loading ? (
@@ -160,7 +251,14 @@ export default function SongDetailSheet(props: Props) {
                   <div className={`pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full ${palette.blob1} blur-2xl`} />
                   <div className={`pointer-events-none absolute -bottom-10 -left-10 h-36 w-36 rounded-full ${palette.blob2} blur-3xl`} />
                   <div className="relative flex gap-4">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-3xl shadow-inner">♪</div>
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/30 shadow-inner">
+                      {song.coverUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={song.coverUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-3xl">♪</span>
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <h2 className="text-xl font-bold leading-tight tracking-tight text-white md:text-2xl">{song.name}</h2>
                       <p className="mt-1.5 truncate text-sm text-zinc-300">{song.artist}</p>
@@ -181,12 +279,17 @@ export default function SongDetailSheet(props: Props) {
                 </div>
 
                 {/* External play */}
+                {(() => {
+                  const links = buildPlatformLinks(song);
+                  return (
                 <div className="mt-4 grid grid-cols-4 gap-1">
-                  <PlayBtn label="QQ音乐" href={song.qqMusicUrl} icon={<QQMusicIcon className="h-12 w-12 rounded-2xl" />} />
-                  <PlayBtn label="网易云" href={song.neteaseUrl} icon={<NeteaseIcon className="h-12 w-12 rounded-2xl" />} />
-                  <PlayBtn label="汽水" href={song.qishuiUrl} icon={<QishuiIcon className="h-12 w-12 rounded-2xl" />} />
-                  <PlayBtn label="酷我" href={song.kuwoUrl} icon={<KuwoIcon className="h-12 w-12 rounded-2xl" />} />
+                  <PlayBtn label="QQ音乐" href={links.qq} icon={<QQMusicIcon className="h-12 w-12 rounded-2xl" />} />
+                  <PlayBtn label="网易云" href={links.netease} icon={<NeteaseIcon className="h-12 w-12 rounded-2xl" />} />
+                  <PlayBtn label="汽水" href={links.qishui} icon={<QishuiIcon className="h-12 w-12 rounded-2xl" />} />
+                  <PlayBtn label="酷我" href={links.kuwo} icon={<KuwoIcon className="h-12 w-12 rounded-2xl" />} />
                 </div>
+                  );
+                })()}
 
                 {/* Divider */}
                 <div className="my-4 flex items-center gap-3">

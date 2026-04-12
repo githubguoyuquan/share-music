@@ -9,7 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "db:up": "bash scripts/ensure-local-db.sh",
+    "db:up:system": "USE_SYSTEM_PG=1 bash scripts/ensure-local-db.sh",
+    "db:prepare": "npm run db:up && prisma db push"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.6.0",
