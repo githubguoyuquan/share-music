@@ -67,7 +67,7 @@ export default function AdminSongsPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
-  const loadSongs = useCallback(async (p = page, search = q) => {
+  const loadSongs = useCallback(async (p: number, search: string) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/songs?page=${p}&pageSize=20&q=${encodeURIComponent(search)}`);
@@ -78,8 +78,10 @@ export default function AdminSongsPage() {
         setTotalPages(data.data.totalPages || 1);
         setTotal(data.data.total);
       }
-    } finally { setLoading(false); }
-  }, [page, q]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const loadCategories = async () => {
     const res = await fetch("/api/admin/categories?flat=1");
@@ -87,7 +89,10 @@ export default function AdminSongsPage() {
     if (data.success) setAllCategories(data.data);
   };
 
-  useEffect(() => { loadSongs(1, ""); loadCategories(); }, []);
+  useEffect(() => {
+    void loadSongs(1, "");
+    void loadCategories();
+  }, [loadSongs]);
 
   const doSearch = () => { setQ(searchInput); loadSongs(1, searchInput); };
 
@@ -270,13 +275,42 @@ export default function AdminSongsPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-3 text-sm">
-          <span className="text-zinc-500">第 {page} / {totalPages} 页</span>
-          <div className="flex gap-2">
-            <button type="button" disabled={page <= 1} onClick={() => loadSongs(page - 1, q)} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs transition hover:bg-zinc-800 disabled:opacity-30">上一页</button>
-            <button type="button" disabled={page >= totalPages} onClick={() => loadSongs(page + 1, q)} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs transition hover:bg-zinc-800 disabled:opacity-30">下一页</button>
-          </div>
+        {/* Pagination — native select 与表单内分类下拉同一套样式 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-4 py-3 text-sm">
+          <span className="text-zinc-500">共 {total} 首歌曲</span>
+          <nav className="flex flex-wrap items-center gap-2" aria-label="分页">
+            <button
+              type="button"
+              disabled={page <= 1 || totalPages <= 1}
+              onClick={() => loadSongs(page - 1, q)}
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs transition hover:bg-zinc-800 disabled:opacity-30"
+            >
+              上一页
+            </button>
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span className="sr-only">跳转页码</span>
+              <select
+                value={page}
+                disabled={totalPages <= 1}
+                onChange={(e) => loadSongs(Number(e.target.value), q)}
+                className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-200 outline-none transition focus:border-red-500/50 disabled:opacity-50"
+              >
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {i + 1} / {totalPages}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={page >= totalPages || totalPages <= 1}
+              onClick={() => loadSongs(page + 1, q)}
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs transition hover:bg-zinc-800 disabled:opacity-30"
+            >
+              下一页
+            </button>
+          </nav>
         </div>
       </div>
 
@@ -438,15 +472,6 @@ export default function AdminSongsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Field({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
-  return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-zinc-500">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder || label} className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm outline-none transition focus:border-red-500/50" />
     </div>
   );
 }

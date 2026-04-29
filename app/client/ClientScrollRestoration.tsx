@@ -55,7 +55,8 @@ export default function ClientScrollRestoration({ children }: { children: React.
     if (Number.isNaN(y)) return;
 
     let cancelled = false;
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    /** Browser `setTimeout` ids are numbers (DOM typings); avoid `NodeJS.Timeout` mismatch. */
+    const timeouts: number[] = [];
 
     const tryRestore = () => {
       if (cancelled) return false;
