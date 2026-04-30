@@ -147,20 +147,46 @@ export default function AdminSongsPage() {
 
   const submitForm = async () => {
     if (!form.name.trim() || !form.artist.trim()) { setFormMsg({ type: "err", text: "歌曲名和歌手为必填" }); return; }
+    const durationSec = Math.floor(Number(form.durationSec));
+    if (!Number.isFinite(durationSec) || durationSec < 1) {
+      setFormMsg({ type: "err", text: "请填写时长（至少 1 秒）" });
+      return;
+    }
     setFormLoading(true);
     setFormMsg(null);
     try {
       const url = editingId ? `/api/admin/songs/${editingId}` : "/api/admin/songs";
       const method = editingId ? "PUT" : "POST";
       const allowedChildIds = new Set(childCategories.map((c) => c.id));
-      const body = { ...form, categoryIds: form.categoryIds.filter((id) => allowedChildIds.has(id)), durationSec: Number(form.durationSec || 0), coverUrl: form.coverUrl || null };
+      const body = {
+        ...form,
+        categoryIds: form.categoryIds.filter((id) => allowedChildIds.has(id)),
+        durationSec,
+        coverUrl: form.coverUrl?.trim() || null,
+      };
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "操作失败" }); return; }
+      const rawText = await res.text();
+      let data: { success?: boolean; error?: string } = {};
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText) as typeof data;
+        } catch {
+          setFormMsg({ type: "err", text: `请求异常 (${res.status})：响应不是 JSON` });
+          return;
+        }
+      }
+      if (!res.ok || !data.success) {
+        setFormMsg({ type: "err", text: data.error || `操作失败 (${res.status})` });
+        return;
+      }
       setShowForm(false);
       showToast(editingId ? "歌曲已更新" : "歌曲已创建");
       loadSongs(editingId ? page : 1, q);
-    } catch { setFormMsg({ type: "err", text: "网络错误" }); } finally { setFormLoading(false); }
+    } catch {
+      setFormMsg({ type: "err", text: "网络错误" });
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const confirmDelete = async () => {

@@ -5,6 +5,10 @@
 
 COMPOSE ?= docker compose
 
+# `make` runs recipes with `/bin/sh` and a minimal PATH, so `npm` from nvm/fnm/Homebrew
+# is often missing ("No such file or directory"). Use login zsh so ~/.zprofile/.zshrc apply.
+_ZSH_LC := /usr/bin/env zsh -lic
+
 .DEFAULT_GOAL := help
 
 help:
@@ -34,37 +38,37 @@ help:
 	@echo "    make docker-compose-config   compose config (sanity check)"
 
 install:
-	npm ci
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm ci'
 
 dev:
-	npm run dev
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run dev'
 
 build:
-	npm run build
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run build'
 
 start:
-	npm run start
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run start'
 
 lint:
-	npm run lint
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run lint'
 
 test:
-	npm run test
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run test'
 
 clean:
 	rm -rf .next
 
 prisma-generate:
-	npx prisma generate
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npx prisma generate'
 
 db-up:
-	npm run db:up
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run db:up'
 
 db-prepare:
-	npm run db:prepare
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run db:prepare'
 
 seed:
-	npm run seed
+	$(_ZSH_LC) 'cd "$(CURDIR)" && npm run seed'
 
 docker-build:
 	$(COMPOSE) build

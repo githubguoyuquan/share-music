@@ -17,14 +17,23 @@ export const favoriteSchema = z.object({
   songId: z.string().uuid("songId 非法"),
 });
 
+const optionalUrlOrEmpty = z.preprocess(
+  (val) => (val === "" || val === undefined ? null : val),
+  z.union([z.string().url(), z.null()]).optional()
+);
+
 export const songCreateSchema = z.object({
   name: z.string().trim().min(1).max(100),
   artist: z.string().trim().min(1).max(100),
   album: z.string().trim().min(1).max(100),
-  durationSec: z.number().int().positive().max(3600),
-  releaseDate: z.string(),
+  durationSec: z.coerce.number().int().min(1, "时长须至少 1 秒").max(3600),
+  releaseDate: z
+    .string()
+    .trim()
+    .min(1, "请填写发行日期")
+    .refine((s) => !Number.isNaN(new Date(s).getTime()), "发行日期无效"),
   genre: z.string().trim().min(1).max(50),
-  coverUrl: z.string().url().optional().nullable(),
+  coverUrl: optionalUrlOrEmpty,
   qqMusicUrl: z.string().optional().nullable(),
   neteaseUrl: z.string().optional().nullable(),
   qishuiUrl: z.string().optional().nullable(),

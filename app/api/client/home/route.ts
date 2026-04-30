@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { cached, TTL } from "@/app/lib/cache";
 import { getUserFromRequest } from "@/app/lib/auth";
+import { isSongWithinNewWindow } from "@/app/lib/song-new";
 
 export async function GET(req: NextRequest) {
   const page = Number(req.nextUrl.searchParams.get("page") || "1");
@@ -30,7 +31,17 @@ export async function GET(req: NextRequest) {
     favoriteSongIds = favorites.map((f) => f.songId);
   }
 
-  const res = NextResponse.json({ success: true, data: { ...data, favoriteSongIds } });
-  res.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+  const now = Date.now();
+  const songsWithNew = data.songs.map((s) => {
+    const plain = JSON.parse(JSON.stringify(s)) as Record<string, unknown>;
+    plain.isNew = isSongWithinNewWindow(s.createdAt, now);
+    return plain;
+  });
+
+  const res = NextResponse.json({
+    success: true,
+    data: { ...data, songs: songsWithNew, favoriteSongIds },
+  });
+  res.headers.set("Cache-Control", "private, no-store");
   return res;
 }
