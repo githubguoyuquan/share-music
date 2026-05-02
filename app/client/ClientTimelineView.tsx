@@ -15,8 +15,6 @@ type Song = {
   genre?: string;
   durationSec?: number;
   releaseDate?: string;
-  createdAt?: string;
-  isNew?: boolean;
   qqMusicUrl?: string | null;
   neteaseUrl?: string | null;
   qishuiUrl?: string | null;
@@ -103,7 +101,7 @@ export default function ClientTimelineView() {
     setActiveChildId(timelineViewCache.activeChildId);
     setActiveGenre(timelineViewCache.activeGenre);
     setShowTopBtn(timelineViewCache.showTopBtn);
-    // 不设 initialLoaded：保留缓存用于首屏，但仍交给下方 effect 重新请求 /api/client/home 以拿到 isNew 等最新字段
+    initialLoaded.current = true;
   }, []);
 
   useEffect(() => {
@@ -186,9 +184,7 @@ export default function ClientTimelineView() {
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
-      const res = await fetch(`/api/client/home?page=${nextPage}&pageSize=20`, { cache: "no-store" });
-      if (!res.ok) return;
-      const d = await res.json();
+      const d = await fetch(`/api/client/home?page=${nextPage}&pageSize=20`).then((r) => r.json());
       if (!d.success) return;
       hydratedRef.current = true;
       setFavoriteSongIds(Array.isArray(d.data.favoriteSongIds) ? d.data.favoriteSongIds : []);
@@ -211,7 +207,7 @@ export default function ClientTimelineView() {
   }, []);
 
   const loadCategories = useCallback(async () => {
-    const res = await fetch("/api/client/user-categories", { cache: "no-store" });
+    const res = await fetch("/api/client/user-categories");
     if (!res.ok) return;
     const data = await res.json();
     if (data?.success) setCategories(data.data || []);

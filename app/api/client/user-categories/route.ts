@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { getUserFromRequest } from "@/app/lib/auth";
 import { invalidate } from "@/app/lib/cache";
-import { isSongWithinNewWindow } from "@/app/lib/song-new";
 
 export async function GET(req: NextRequest) {
   const user = getUserFromRequest(req);
@@ -40,19 +39,7 @@ export async function GET(req: NextRequest) {
   const visible = rows.filter((c) => c.name !== "我的歌单");
   const likes = visible.filter((c) => c.name === "喜欢");
   const normal = visible.filter((c) => c.name !== "喜欢");
-  const now = Date.now();
-  const data = [...likes, ...normal].map((c) => ({
-    ...c,
-    songs: c.songs.map((row) => {
-      if (!row.song) return row;
-      const plain = JSON.parse(JSON.stringify(row.song)) as Record<string, unknown>;
-      plain.isNew = isSongWithinNewWindow(row.song.createdAt, now);
-      return { ...row, song: plain };
-    }),
-  }));
-  const res = NextResponse.json({ success: true, data });
-  res.headers.set("Cache-Control", "private, no-store");
-  return res;
+  return NextResponse.json({ success: true, data: [...likes, ...normal] });
 }
 
 export async function POST(req: NextRequest) {

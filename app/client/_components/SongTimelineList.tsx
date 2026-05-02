@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isSongWithinNewWindow } from "@/app/lib/song-new";
 
 type Song = {
   id: string;
@@ -11,9 +10,6 @@ type Song = {
   genre?: string;
   durationSec?: number;
   releaseDate?: string;
-  createdAt?: string;
-  /** 由接口按入库时间计算，优先用于展示 new */
-  isNew?: boolean;
 };
 
 type Props = {
@@ -49,11 +45,6 @@ const displayMonth = (key: string) => {
   const [y, m] = key.split("-");
   return `${parseInt(m, 10)}月 ${y} 发行`;
 };
-
-function showNewBadge(song: Song) {
-  if (typeof song.isNew === "boolean") return song.isNew;
-  return isSongWithinNewWindow(song.createdAt);
-}
 
 export default function SongTimelineList({
   songs,
@@ -295,14 +286,7 @@ export default function SongTimelineList({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-lg font-medium text-zinc-100 group-hover:text-white">{song.name}</span>
-                        {showNewBadge(song) ? (
-                          <span className="shrink-0 rounded-md bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white">
-                            new
-                          </span>
-                        ) : null}
-                      </p>
+                      <p className="truncate text-lg font-medium text-zinc-100 group-hover:text-white">{song.name}</p>
                       <p className="mt-0.5 truncate text-base text-zinc-400">{song.artist}{song.album ? <span className="mx-1 text-zinc-600">·</span> : null}{song.album || ""}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

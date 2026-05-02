@@ -12,8 +12,6 @@ type Song = {
   artist: string;
   album: string;
   releaseDate?: string;
-  createdAt?: string;
-  isNew?: boolean;
   genre?: string;
   durationSec?: number;
   qqMusicUrl?: string | null;
@@ -60,7 +58,7 @@ export default function MyListView() {
   }, [cats, activeCatId]);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/client/user-categories", { cache: "no-store" });
+    const res = await fetch("/api/client/user-categories");
     if (!res.ok) return;
     const data = await res.json();
     if (data.success) {
@@ -71,7 +69,8 @@ export default function MyListView() {
 
   useEffect(() => {
     if (!authChecked || !user) return;
-    void load();
+    if (myListViewCache.loaded && myListViewCache.hydrated) return;
+    load();
   }, [authChecked, user, load]);
 
   const allSongs = useMemo(() => {
