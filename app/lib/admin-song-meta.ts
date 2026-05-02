@@ -1,4 +1,4 @@
-/** 后台「自动抓取」歌曲元信息：与 `/api/admin/song-meta` 请求/合并逻辑 */
+/** 对接 `/api/admin/song-meta`：自动抓取工作流见该路由文件顶部注释。 */
 
 export type SongMetaPayload = {
   name?: string;
@@ -34,15 +34,22 @@ export async function fetchArtistsBySongName(name: string): Promise<
   | { ok: false; error: string; status: number }
 > {
   const url = buildSongMetaApiUrl(name.trim());
-  const res = await fetch(url);
-  let data: { success?: boolean; error?: string; data?: { artists?: string[] } } = {};
+  const res = await fetch(url, { credentials: "include" });
+  let data: {
+    success?: boolean;
+    error?: string;
+    debug?: string;
+    data?: { artists?: string[] };
+  } = {};
   try {
     data = await res.json();
   } catch {
     return { ok: false, error: "响应不是合法 JSON", status: res.status };
   }
   if (!res.ok || !data.success) {
-    return { ok: false, error: data.error || "抓取歌手失败", status: res.status };
+    const base = data.error || "抓取歌手失败";
+    const errText = data.debug ? `${base}（${data.debug}）` : base;
+    return { ok: false, error: errText, status: res.status };
   }
   const artists = Array.isArray(data.data?.artists) ? data.data!.artists! : [];
   return { ok: true, artists };
@@ -57,15 +64,17 @@ export async function fetchSongMetaByNameAndArtist(
   | { ok: false; error: string; status: number }
 > {
   const url = buildSongMetaApiUrl(name.trim(), artist.trim());
-  const res = await fetch(url);
-  let data: { success?: boolean; error?: string; data?: SongMetaPayload } = {};
+  const res = await fetch(url, { credentials: "include" });
+  let data: { success?: boolean; error?: string; debug?: string; data?: SongMetaPayload } = {};
   try {
     data = await res.json();
   } catch {
     return { ok: false, error: "响应不是合法 JSON", status: res.status };
   }
   if (!res.ok || !data.success) {
-    return { ok: false, error: data.error || "抓取元信息失败", status: res.status };
+    const base = data.error || "抓取元信息失败";
+    const errText = data.debug ? `${base}（${data.debug}）` : base;
+    return { ok: false, error: errText, status: res.status };
   }
   return { ok: true, meta: data.data || {} };
 }
