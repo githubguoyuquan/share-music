@@ -1,12 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import {
-  mergeSongMetaIntoForm,
-  fetchSongMetaByNameAndArtist,
-  resolveArtistsOrSingleSongMeta,
-  type AdminSongMetaFormFields,
-} from "@/app/lib/admin-song-meta";
 
 type Category = { id: string; name: string; color: string | null; parentId?: string | null };
 type Song = {
@@ -16,7 +10,7 @@ type Song = {
   categories?: { category: Category }[];
 };
 
-const EMPTY_FORM: AdminSongMetaFormFields = {
+const EMPTY_FORM = {
   name: "", artist: "", album: "", durationSec: "", releaseDate: "",
   genre: "", coverUrl: "",
   categoryIds: [] as string[],
@@ -65,8 +59,6 @@ export default function AdminSongsPage() {
   const [metaLoadingFill, setMetaLoadingFill] = useState(false);
   const [artistOptions, setArtistOptions] = useState<string[]>([]);
   const [pickedArtist, setPickedArtist] = useState("");
-  /** 自动抓取区「歌手」输入：与歌名并排；有值时与歌名一起直接拉元信息 */
-  const [metaArtistQuery, setMetaArtistQuery] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<Song | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -74,6 +66,50 @@ export default function AdminSongsPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+
+  /** 按歌曲名 + 歌手拉取元信息并写入表单（select 对「已是当前值」的选项不会触发 onChange，故检索歌手后也需主动调用） */
+  const fillMetaForArtist = useCallback(async (songName: string, artistName: string, okDetail?: string) => {
+    const sn = songName.trim();
+    const an = artistName.trim();
+    if (!sn || !an) {
+      setFormMsg({ type: "err", text: "请先填写歌曲名并选择歌手" });
+      return;
+    }
+    setMetaLoadingFill(true);
+    try {
+      const res = await fetch(`/api/admin/song-meta?name=${encodeURIComponent(sn)}&artist=${encodeURIComponent(an)}`);
+      const rawText = await res.text();
+      let data: { success?: boolean; error?: string; data?: Record<string, unknown> } = {};
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText) as typeof data;
+        } catch {
+          setFormMsg({ type: "err", text: `自动填充失败 (${res.status})：响应不是有效 JSON` });
+          return;
+        }
+      }
+      if (!res.ok || !data.success) {
+        setFormMsg({ type: "err", text: data.error || "自动填充失败" });
+        return;
+      }
+      const meta = data.data || {};
+      setForm((f) => ({
+        ...f,
+        name: String(meta.name || f.name),
+        artist: String(meta.artist || an),
+        album: String(meta.album ?? f.album ?? ""),
+        durationSec: String(meta.durationSec ?? f.durationSec ?? ""),
+        releaseDate: String(meta.releaseDate || f.releaseDate || "").slice(0, 10),
+        genre: String(meta.genre ?? f.genre ?? ""),
+        coverUrl: String(meta.coverUrl ?? f.coverUrl ?? ""),
+      }));
+      setFormMsg({ type: "ok", text: okDetail || "已根据所选歌手自动填充元信息" });
+    } catch {
+      setFormMsg({ type: "err", text: "网络错误" });
+    } finally {
+      setMetaLoadingFill(false);
+    }
+  }, []);
 
   const loadSongs = useCallback(async (p: number, search: string) => {
     setLoading(true);
@@ -111,7 +147,6 @@ export default function AdminSongsPage() {
     setActiveChildCategoryId("");
     setArtistOptions([]);
     setPickedArtist("");
-    setMetaArtistQuery("");
     setFormMsg(null);
     setShowForm(true);
   };
@@ -129,80 +164,25 @@ export default function AdminSongsPage() {
     setActiveChildCategoryId("");
     setArtistOptions([]);
     setPickedArtist(s.artist);
-    setMetaArtistQuery(s.artist);
     setFormMsg(null);
     setShowForm(true);
   };
 
-  const applyMetaForPickedArtist = useCallback(async (songTitle: string, picked: string) => {
-    if (!picked.trim()) return;
-    setMetaLoadingFill(true);
-    try {
-      const r = await fetchSongMetaByNameAndArtist(songTitle, picked);
-      if (!r.ok) {
-        setFormMsg({ type: "err", text: r.error });
-        return;
-      }
-      setForm((f) => mergeSongMetaIntoForm(f, r.meta, picked));
-      setFormMsg({ type: "ok", text: "已根据所选歌手填充元信息" });
-    } catch {
-      setFormMsg({ type: "err", text: "网络错误" });
-    } finally {
-      setMetaLoadingFill(false);
-    }
-  }, []);
-
-  const runSmartSongMetaFetch = async () => {
-    const title = form.name.trim();
-    if (!title) {
-      setFormMsg({ type: "err", text: "请先输入歌曲名" });
-      return;
-    }
-    const sideArtist = metaArtistQuery.trim();
-
-    if (sideArtist) {
-      setMetaLoadingFill(true);
-      setFormMsg(null);
-      try {
-        const r = await fetchSongMetaByNameAndArtist(title, sideArtist);
-        if (!r.ok) {
-          setFormMsg({ type: "err", text: r.error });
-          return;
-        }
-        setForm((f) => mergeSongMetaIntoForm(f, r.meta, sideArtist));
-        setPickedArtist(r.meta.artist?.trim() || sideArtist);
-        setArtistOptions([]);
-        setFormMsg({ type: "ok", text: "已根据歌名与歌手抓取元信息" });
-      } catch {
-        setFormMsg({ type: "err", text: "网络错误" });
-      } finally {
-        setMetaLoadingFill(false);
-      }
-      return;
-    }
-
+  const fetchArtistsBySongName = async () => {
+    const songName = form.name.trim();
+    if (!songName) { setFormMsg({ type: "err", text: "请先输入歌曲名" }); return; }
     setMetaLoadingArtists(true);
-    setFormMsg(null);
     try {
-      const resolved = await resolveArtistsOrSingleSongMeta(title);
-      if (resolved.mode === "error") {
-        setFormMsg({ type: "err", text: resolved.error });
-        return;
-      }
-      if (resolved.mode === "filled") {
-        setForm((f) => mergeSongMetaIntoForm(f, resolved.meta, resolved.lockedArtist));
-        setMetaArtistQuery(resolved.lockedArtist);
-        setPickedArtist(resolved.lockedArtist);
-        setArtistOptions([]);
-        setFormMsg({ type: "ok", text: "仅匹配到一位歌手，已自动填充元信息" });
-        return;
-      }
-      setArtistOptions(resolved.artists);
-      setPickedArtist("");
-      setFormMsg({
-        type: "ok",
-        text: `已找到 ${resolved.artists.length} 位歌手候选，请在下方选择歌手`,
-      });
+      const res = await fetch(`/api/admin/song-meta?name=${encodeURIComponent(songName)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "抓取歌手失败" }); return; }
+      const artists: string[] = Array.isArray(data.data?.artists) ? data.data.artists : [];
+      setArtistOptions(artists);
+      if (!artists.length) { setFormMsg({ type: "err", text: "未找到可选歌手" }); return; }
+      const nextArtist = artists.includes(form.artist) ? form.artist : artists[0];
+      setPickedArtist(nextArtist);
+      setForm((f) => ({ ...f, artist: nextArtist }));
+      await fillMetaForArtist(songName, nextArtist, `已抓取 ${artists.length} 位歌手候选并已填充元信息`);
     } catch {
       setFormMsg({ type: "err", text: "网络错误" });
     } finally {
@@ -212,20 +192,46 @@ export default function AdminSongsPage() {
 
   const submitForm = async () => {
     if (!form.name.trim() || !form.artist.trim()) { setFormMsg({ type: "err", text: "歌曲名和歌手为必填" }); return; }
+    const durationSec = Math.floor(Number(form.durationSec));
+    if (!Number.isFinite(durationSec) || durationSec < 1) {
+      setFormMsg({ type: "err", text: "请填写时长（至少 1 秒）" });
+      return;
+    }
     setFormLoading(true);
     setFormMsg(null);
     try {
       const url = editingId ? `/api/admin/songs/${editingId}` : "/api/admin/songs";
       const method = editingId ? "PUT" : "POST";
       const allowedChildIds = new Set(childCategories.map((c) => c.id));
-      const body = { ...form, categoryIds: form.categoryIds.filter((id) => allowedChildIds.has(id)), durationSec: Number(form.durationSec || 0), coverUrl: form.coverUrl || null };
+      const body = {
+        ...form,
+        categoryIds: form.categoryIds.filter((id) => allowedChildIds.has(id)),
+        durationSec,
+        coverUrl: form.coverUrl?.trim() || null,
+      };
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok || !data.success) { setFormMsg({ type: "err", text: data.error || "操作失败" }); return; }
+      const rawText = await res.text();
+      let data: { success?: boolean; error?: string } = {};
+      if (rawText) {
+        try {
+          data = JSON.parse(rawText) as typeof data;
+        } catch {
+          setFormMsg({ type: "err", text: `请求异常 (${res.status})：响应不是 JSON` });
+          return;
+        }
+      }
+      if (!res.ok || !data.success) {
+        setFormMsg({ type: "err", text: data.error || `操作失败 (${res.status})` });
+        return;
+      }
       setShowForm(false);
       showToast(editingId ? "歌曲已更新" : "歌曲已创建");
       loadSongs(editingId ? page : 1, q);
-    } catch { setFormMsg({ type: "err", text: "网络错误" }); } finally { setFormLoading(false); }
+    } catch {
+      setFormMsg({ type: "err", text: "网络错误" });
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -387,30 +393,17 @@ export default function AdminSongsPage() {
 
             <div className="space-y-4">
               <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                <p className="mb-2 text-xs font-medium text-zinc-500">
-                  自动抓取：仅歌名 → 检索歌手候选（唯一候选则直接填充）；歌名 + 右侧歌手 → 直接匹配元信息
-                </p>
+                <p className="mb-2 text-xs font-medium text-zinc-500">自动抓取（歌名 → 歌手候选 → 元信息填充）</p>
                 <div className="space-y-2">
-                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
                     <input
                       value={form.name}
                       onChange={(e) => setField("name", e.target.value)}
-                      placeholder="歌曲名"
-                      className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-red-500/50"
+                      placeholder="先输入歌曲名"
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-red-500/50"
                     />
-                    <input
-                      value={metaArtistQuery}
-                      onChange={(e) => setMetaArtistQuery(e.target.value)}
-                      placeholder="歌手（可选）"
-                      className="min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-red-500/50"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void runSmartSongMetaFetch()}
-                      disabled={metaLoadingArtists || metaLoadingFill}
-                      className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50 sm:whitespace-nowrap"
-                    >
-                      {metaLoadingArtists || metaLoadingFill ? "抓取中…" : "智能抓取"}
+                    <button type="button" onClick={fetchArtistsBySongName} disabled={metaLoadingArtists || metaLoadingFill} className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 transition hover:bg-zinc-700 disabled:opacity-50">
+                      {metaLoadingArtists ? "检索中..." : "检索歌手"}
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-2">
@@ -420,19 +413,16 @@ export default function AdminSongsPage() {
                         const next = e.target.value;
                         setPickedArtist(next);
                         setField("artist", next);
-                        const songTitle = form.name.trim();
-                        if (!next || !songTitle) return;
-                        void applyMetaForPickedArtist(songTitle, next);
+                        if (!next) return;
+                        void fillMetaForArtist(form.name.trim(), next.trim());
                       }}
-                      disabled={metaLoadingFill}
-                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 disabled:opacity-50"
+                      className="rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200"
                     >
-                      <option value="">{artistOptions.length ? "选择歌手（来自检索）" : "先仅输入歌名并智能抓取，或填写歌手后抓取"}</option>
-                      {artistOptions.map((a) => (
-                        <option key={a} value={a}>{a}</option>
-                      ))}
+                      <option value="">{artistOptions.length ? "选择歌手" : "先抓取歌手列表"}</option>
+                      {artistOptions.map((a) => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
+                  {metaLoadingFill ? <p className="text-xs text-zinc-500">正在请求元信息…</p> : null}
                 </div>
               </div>
 

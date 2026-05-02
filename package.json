@@ -3,16 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
+    "db:push": "prisma db push",
+    "db:prepare": "prisma db push",
     "db:up": "bash scripts/ensure-local-db.sh",
-    "db:up:system": "USE_SYSTEM_PG=1 bash scripts/ensure-local-db.sh",
-    "db:prepare": "npm run db:up && prisma db push"
+    "db:up:system": "USE_SYSTEM_PG=1 bash scripts/ensure-local-db.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.6.0",
